@@ -35,6 +35,16 @@ This generic type complicates the API with limited benefit because we use BoxStr
 
 By [@Geal](https://github.com/Geal) in https://github.com/apollographql/router/pull/1420
 
+### Insert the full target triplet in the package name [PR #1393](https://github.com/apollographql/router/pull/1393)
+
+The released package names will now contain the full target triplet in their name:
+
+* `router-0.12.1-x86_64-linux.tar.gz` -> `router-0.12.1-x86_64-unknown-linux-gnu.tar.gz`
+* `router-0.12.1-x86_64-macos.tar.gz` -> `router-0.12.1-x86_64-apple-darwin.tar.gz`
+* `router-0.12.1-x86_64-windows.tar.gz` -> `router-0.12.1-x86_64-pc-windows-msvc.tar.gz`
+
+By [@Geal](https://github.com/Geal) in https://github.com/apollographql/router/pull/1393
+
 ## 🚀 Features
 
 ### Rewrite the caching API ([PR #1281](https://github.com/apollographql/router/pull/1281)

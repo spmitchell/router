@@ -62,6 +62,21 @@ cache.
 
 By [@Geal](https://github.com/Geal) in https://github.com/apollographql/router/pull/1281
 
+### Add configurable depth limit for operations ([PR #FIXME](https://github.com/apollographql/router/pull/FIXME)
+
+A new option in the configuration file allows changing the depth limit 
+for incoming GraphQL queries and other operations.
+The default is some very high limit that helps prevent stack overflow while processing,
+but it can be desirable to set it lower. For example:
+
+```yaml
+server:
+  experimental_operation_depth_limit: 10
+```
+
+
+By [@SimonSapin](https://github.com/SimonSapin)
+
 ## 🐛 Fixes
 
 ### Update the scaffold template so it targets router v0.12.0 ([#PR1431](https://github.com/apollographql/router/pull/1431))
@@ -74,7 +89,7 @@ By [@o0Ignition0o](https://github.com/o0Ignition0o) in https://github.com/apollo
 
 In Rhai plugins, accessors that mutate the originating request are not available when in the subgraph phase. Previously trying to mutate anyway would cause a Rust panic. This has been changed to a Rhai error instead.
 
-By @SimonSapin
+By [@SimonSapin](https://github.com/SimonSapin)
 
 ### Optimizations ([PR #1423](https://github.com/apollographql/router/pull/1423)
 

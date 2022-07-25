@@ -233,7 +233,8 @@ mod test {
             .unwrap(),
         );
 
-        let builder = PluggableRouterServiceBuilder::new(schema.clone());
+        let limit = crate::configuration::default_operation_depth_limit();
+        let builder = PluggableRouterServiceBuilder::new(schema.clone(), limit);
 
         let builder = builder
             .with_dyn_plugin("apollo.traffic_shaping".to_string(), plugin)

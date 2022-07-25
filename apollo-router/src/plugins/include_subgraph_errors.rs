@@ -95,6 +95,7 @@ mod test {
     use tower::Service;
 
     use super::*;
+    use crate::configuration::default_operation_depth_limit;
     use crate::graphql::Response;
     use crate::json_ext::Object;
     use crate::plugin::test::MockSubgraph;
@@ -194,7 +195,8 @@ mod test {
                 .unwrap(),
         );
 
-        let builder = PluggableRouterServiceBuilder::new(schema.clone());
+        let builder =
+            PluggableRouterServiceBuilder::new(schema.clone(), default_operation_depth_limit());
         let builder = builder
             .with_dyn_plugin("experimental.include_subgraph_errors".to_string(), plugin)
             .with_subgraph_service("accounts", account_service.clone())

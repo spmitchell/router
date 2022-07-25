@@ -269,11 +269,17 @@ pub(crate) struct Server {
     /// default: false
     #[serde(default = "default_defer_support")]
     pub(crate) experimental_defer_support: bool,
+
+    /// Experimental limitation of query depth
+    /// default: 4096
+    #[serde(default = "default_operation_depth_limit")]
+    pub(crate) experimental_operation_depth_limit: u32,
 }
 
 #[buildstructor::buildstructor]
 impl Server {
     #[builder]
+    #[allow(clippy::too_many_arguments)] // Used through a builder, not directly
     pub(crate) fn new(
         listen: Option<ListenAddr>,
         cors: Option<Cors>,
@@ -282,6 +288,7 @@ impl Server {
         endpoint: Option<String>,
         health_check_path: Option<String>,
         defer_support: Option<bool>,
+        operation_depth_limit: Option<u32>,
     ) -> Self {
         Self {
             listen: listen.unwrap_or_else(default_listen),
@@ -291,6 +298,8 @@ impl Server {
             endpoint: endpoint.unwrap_or_else(default_endpoint),
             health_check_path: health_check_path.unwrap_or_else(default_health_check_path),
             experimental_defer_support: defer_support.unwrap_or_else(default_defer_support),
+            experimental_operation_depth_limit: operation_depth_limit
+                .unwrap_or_else(default_operation_depth_limit),
         }
     }
 }
@@ -423,6 +432,10 @@ fn default_health_check_path() -> String {
 
 fn default_defer_support() -> bool {
     false
+}
+
+pub(crate) fn default_operation_depth_limit() -> u32 {
+    4096
 }
 
 impl Default for Server {

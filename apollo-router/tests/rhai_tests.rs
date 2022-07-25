@@ -38,7 +38,8 @@ async fn all_rhai_callbacks_are_invoked() {
             .unwrap(),
     );
 
-    let mut builder = PluggableRouterServiceBuilder::new(schema.clone())
+    let operation_depth_limit = 4096;
+    let mut builder = PluggableRouterServiceBuilder::new(schema.clone(), operation_depth_limit)
         .with_dyn_plugin("apollo.rhai".to_string(), dyn_plugin);
 
     let subgraphs = schema.subgraphs();

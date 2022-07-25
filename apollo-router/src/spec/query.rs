@@ -35,17 +35,12 @@ pub struct Query {
 }
 
 impl Query {
-    /// Returns a reference to the underlying query string.
-    pub fn as_str(&self) -> &str {
-        self.string.as_str()
-    }
-
     /// Re-format the response value to match this query.
     ///
     /// This will discard unrequested fields and re-order the output to match the order of the
     /// query.
     #[tracing::instrument(skip_all, level = "trace")]
-    pub fn format_response(
+    pub(crate) fn format_response(
         &self,
         response: &mut Response,
         operation_name: Option<&str>,
@@ -128,10 +123,17 @@ impl Query {
         response.data = Some(Value::default());
     }
 
-    pub fn parse(query: impl Into<String>, schema: &Schema) -> Result<Self, SpecError> {
+    pub(crate) fn parse(
+        query: impl Into<String>,
+        schema: &Schema,
+        operation_depth_limit: u32,
+    ) -> Result<Self, SpecError> {
         let string = query.into();
 
-        let parser = apollo_parser::Parser::new(string.as_str());
+        let parser = apollo_parser::Parser::with_recursion_limit(
+            string.as_str(),
+            operation_depth_limit as usize,
+        );
         let tree = parser.parse();
 
         // Trace log recursion limit data
@@ -682,7 +684,7 @@ impl Query {
         }
     }
 
-    pub fn contains_introspection(&self) -> bool {
+    pub(crate) fn contains_introspection(&self) -> bool {
         self.operations.iter().any(Operation::is_introspection)
     }
 }
@@ -887,7 +889,8 @@ mod tests {
                 .parse::<Schema>()
                 .expect("could not parse schema");
             let api_schema = schema.api_schema();
-            let query = Query::parse($query, &schema).expect("could not parse query");
+            let limit = crate::configuration::default_operation_depth_limit();
+            let query = Query::parse($query, &schema, limit).expect("could not parse query");
             let mut response = Response::builder().data($response.clone()).build();
 
             query.format_response(
@@ -940,7 +943,8 @@ mod tests {
                 .parse::<Schema>()
                 .expect("could not parse schema");
             let api_schema = schema.api_schema();
-            let query = Query::parse($query, &schema).expect("could not parse query");
+            let limit = crate::configuration::default_operation_depth_limit();
+            let query = Query::parse($query, &schema, limit).expect("could not parse query");
             let mut response = Response::builder().data($response.clone()).build();
 
             query.format_response(
@@ -1296,6 +1300,7 @@ mod tests {
                     .as_ref()
                     .expect("query has been added right above; qed"),
                 &schema,
+                crate::configuration::default_operation_depth_limit(),
             )
             .expect("could not parse query");
             query.validate_variables(&request, &schema)
@@ -3196,6 +3201,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
         assert_eq!(query.operations.len(), 1);
@@ -3215,6 +3221,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
 
@@ -3242,6 +3249,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
 
@@ -3274,6 +3282,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
 
@@ -3329,6 +3338,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
         assert_eq!(query.operations.len(), 1);
@@ -3348,6 +3358,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
 
@@ -3375,6 +3386,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
 
@@ -3407,6 +3419,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect("could not parse query");
 
@@ -3451,6 +3464,7 @@ mod tests {
                 }
             }",
             &schema,
+            crate::configuration::default_operation_depth_limit(),
         )
         .expect_err("should not parse query");
     }
@@ -4687,7 +4701,8 @@ mod tests {
 
         let schema = schema.parse::<Schema>().expect("could not parse schema");
         let api_schema = schema.api_schema();
-        let query = Query::parse(query, &schema).expect("could not parse query");
+        let limit = crate::configuration::default_operation_depth_limit();
+        let query = Query::parse(query, &schema, limit).expect("could not parse query");
         let mut response = Response::builder()
             .data(json! {{
                 "object": {
@@ -4887,7 +4902,8 @@ mod tests {
               }
             }
           }}";
-        assert!(Query::parse(query, api_schema)
+        let limit = crate::configuration::default_operation_depth_limit();
+        assert!(Query::parse(query, api_schema, limit)
             .unwrap()
             .operations
             .get(0)
@@ -4902,7 +4918,7 @@ mod tests {
             }
           }";
 
-        assert!(Query::parse(query, api_schema)
+        assert!(Query::parse(query, api_schema, limit)
             .unwrap()
             .operations
             .get(0)
@@ -4913,7 +4929,7 @@ mod tests {
             __typename
           }";
 
-        assert!(Query::parse(query, api_schema)
+        assert!(Query::parse(query, api_schema, limit)
             .unwrap()
             .operations
             .get(0)

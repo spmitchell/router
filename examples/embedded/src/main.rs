@@ -23,7 +23,8 @@ async fn main() -> Result<()> {
 
     // PluggableRouterServiceBuilder creates a GraphQL pipeline to process queries against a supergraph Schema
     // The whole pipeline is set up...
-    let mut router_builder = PluggableRouterServiceBuilder::new(schema);
+    let operation_depth_limit = 4096;
+    let mut router_builder = PluggableRouterServiceBuilder::new(schema, operation_depth_limit);
 
     // ... except the SubgraphServices, so we'll let it know Requests against the `accounts` service
     // can be performed with an http client against the `https://accounts.demo.starstuff.dev` url

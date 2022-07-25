@@ -22,6 +22,7 @@ use tower::ServiceExt;
 
 use super::DynPlugin;
 use crate::cache::DeduplicatingCache;
+use crate::configuration::default_operation_depth_limit;
 use crate::introspection::Introspection;
 use crate::layers::DEFAULT_BUFFER_SIZE;
 use crate::plugin::Plugin;
@@ -134,6 +135,7 @@ impl PluginTestHarness {
                 schema.clone(),
                 Some(Arc::new(Introspection::from_schema(&schema))),
                 false,
+                default_operation_depth_limit(),
             )
             .await?,
             DEFAULT_BUFFER_SIZE,

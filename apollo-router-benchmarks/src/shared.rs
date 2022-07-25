@@ -223,7 +223,8 @@ pub fn setup() -> PluggableRouterServiceBuilder {
             .unwrap(),
     );
 
-    let builder = PluggableRouterServiceBuilder::new(schema);
+    let operation_depth_limit = 4096;
+    let builder = PluggableRouterServiceBuilder::new(schema, operation_depth_limit);
 
     builder
         .with_subgraph_service("accounts", account_service)

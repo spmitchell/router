@@ -242,16 +242,18 @@ pub struct PluggableRouterServiceBuilder {
     subgraph_services: Vec<(String, Arc<dyn MakeSubgraphService>)>,
     introspection: bool,
     defer_support: bool,
+    operation_depth_limit: u32,
 }
 
 impl PluggableRouterServiceBuilder {
-    pub fn new(schema: Arc<Schema>) -> Self {
+    pub fn new(schema: Arc<Schema>, operation_depth_limit: u32) -> Self {
         Self {
             schema,
             plugins: Default::default(),
             subgraph_services: Default::default(),
             introspection: false,
             defer_support: false,
+            operation_depth_limit,
         }
     }
 
@@ -328,10 +330,14 @@ impl PluggableRouterServiceBuilder {
         };
 
         // QueryPlannerService takes an UnplannedRequest and outputs PlannedRequest
-        let bridge_query_planner =
-            BridgeQueryPlanner::new(self.schema.clone(), introspection, self.defer_support)
-                .await
-                .map_err(ServiceBuildError::QueryPlannerError)?;
+        let bridge_query_planner = BridgeQueryPlanner::new(
+            self.schema.clone(),
+            introspection,
+            self.defer_support,
+            self.operation_depth_limit,
+        )
+        .await
+        .map_err(ServiceBuildError::QueryPlannerError)?;
         let query_planner_service = ServiceBuilder::new().buffered().service(
             self.plugins.iter_mut().rev().fold(
                 CachingQueryPlanner::new(bridge_query_planner, plan_cache_limit)

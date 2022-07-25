@@ -34,6 +34,7 @@ pub(crate) struct BridgeQueryPlanner {
     planner: Arc<Planner<QueryPlan>>,
     schema: Arc<Schema>,
     introspection: Option<Arc<Introspection>>,
+    operation_depth_limit: u32,
 }
 
 impl BridgeQueryPlanner {
@@ -41,6 +42,7 @@ impl BridgeQueryPlanner {
         schema: Arc<Schema>,
         introspection: Option<Arc<Introspection>>,
         defer_support: bool,
+        operation_depth_limit: u32,
     ) -> Result<Self, QueryPlannerError> {
         Ok(Self {
             planner: Arc::new(
@@ -56,14 +58,20 @@ impl BridgeQueryPlanner {
             ),
             schema,
             introspection,
+            operation_depth_limit,
         })
     }
 
-    async fn parse_selections(&self, query: String) -> Result<Query, QueryPlannerError> {
+    async fn parse_selections(
+        &self,
+        query: String,
+        operation_depth_limit: u32,
+    ) -> Result<Query, QueryPlannerError> {
         let schema = self.schema.clone();
-        let query_parsing_future =
-            tokio::task::spawn_blocking(move || Query::parse(query, &schema))
-                .instrument(tracing::info_span!("parse_query", "otel.kind" = %SpanKind::Internal));
+        let query_parsing_future = tokio::task::spawn_blocking(move || {
+            Query::parse(query, &schema, operation_depth_limit)
+        })
+        .instrument(tracing::info_span!("parse_query", "otel.kind" = %SpanKind::Internal));
         match query_parsing_future.await {
             Ok(res) => res.map_err(QueryPlannerError::from),
             Err(err) => {
@@ -95,6 +103,7 @@ impl BridgeQueryPlanner {
         operation: Option<String>,
         options: QueryPlanOptions,
         mut selections: Query,
+        operation_depth_limit: u32,
     ) -> Result<QueryPlannerContent, QueryPlannerError> {
         let planner_result = self
             .planner
@@ -109,7 +118,7 @@ impl BridgeQueryPlanner {
                 data: QueryPlan { node: Some(node) },
                 usage_reporting,
             } => {
-                let subselections = node.parse_subselections(&*self.schema);
+                let subselections = node.parse_subselections(&*self.schema, operation_depth_limit);
                 selections.subselections = subselections;
                 Ok(QueryPlannerContent::Plan {
                     plan: Arc::new(query_planner::QueryPlan {
@@ -175,13 +184,16 @@ impl Service<QueryPlannerRequest> for BridgeQueryPlanner {
 #[async_trait]
 impl QueryPlanner for BridgeQueryPlanner {
     async fn get(&self, key: QueryKey) -> Result<QueryPlannerContent, QueryPlannerError> {
-        let selections = self.parse_selections(key.0.clone()).await?;
+        let selections = self
+            .parse_selections(key.0.clone(), self.operation_depth_limit)
+            .await?;
 
         if selections.contains_introspection() {
             return self.introspection(key.0.as_str()).await;
         }
 
-        self.plan(key.0, key.1, key.2, selections).await
+        self.plan(key.0, key.1, key.2, selections, self.operation_depth_limit)
+            .await
     }
 }
 
@@ -199,6 +211,7 @@ mod tests {
     use test_log::test;
 
     use super::*;
+    use crate::configuration::default_operation_depth_limit;
 
     #[test(tokio::test)]
     async fn test_plan() {
@@ -206,6 +219,7 @@ mod tests {
             Arc::new(example_schema()),
             Some(Arc::new(Introspection::from_schema(&example_schema()))),
             false,
+            default_operation_depth_limit(),
         )
         .await
         .unwrap();
@@ -233,6 +247,7 @@ mod tests {
             Arc::new(example_schema()),
             Some(Arc::new(Introspection::from_schema(&example_schema()))),
             false,
+            default_operation_depth_limit(),
         )
         .await
         .unwrap();
@@ -276,6 +291,7 @@ mod tests {
             Arc::new(example_schema()),
             Some(Arc::new(Introspection::from_schema(&example_schema()))),
             false,
+            default_operation_depth_limit(),
         )
         .await
         .unwrap()
@@ -288,6 +304,7 @@ mod tests {
             None,
             QueryPlanOptions::default(),
             Query::default(),
+            default_operation_depth_limit(),
         )
         .await
         .unwrap_err();
@@ -310,6 +327,7 @@ mod tests {
             Arc::new(example_schema()),
             Some(Arc::new(Introspection::from_schema(&example_schema()))),
             false,
+            default_operation_depth_limit(),
         )
         .await
         .unwrap();

@@ -628,7 +628,8 @@ async fn setup_router_and_registry() -> (
         Arc::new(include_str!("fixtures/supergraph.graphql").parse().unwrap());
     let counting_registry = CountingServiceRegistry::new();
     let subgraphs = schema.subgraphs();
-    let mut builder = PluggableRouterServiceBuilder::new(schema.clone());
+    let operation_depth_limit = 4096;
+    let mut builder = PluggableRouterServiceBuilder::new(schema.clone(), operation_depth_limit);
     let telemetry_plugin = Telemetry::new(telemetry::config::Conf {
         metrics: Option::default(),
         tracing: Some(Tracing::default()),

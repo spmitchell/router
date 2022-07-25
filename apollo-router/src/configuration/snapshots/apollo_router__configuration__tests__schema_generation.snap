@@ -1,6 +1,5 @@
 ---
 source: apollo-router/src/configuration/mod.rs
-assertion_line: 848
 expression: "&schema"
 ---
 {
@@ -326,7 +325,8 @@ expression: "&schema"
         "landing_page": true,
         "endpoint": "/",
         "health_check_path": "/.well-known/apollo/server-health",
-        "experimental_defer_support": false
+        "experimental_defer_support": false,
+        "experimental_operation_depth_limit": 4096
       },
       "type": "object",
       "properties": {
@@ -400,6 +400,13 @@ expression: "&schema"
           "description": "Experimental @defer directive support default: false",
           "default": false,
           "type": "boolean"
+        },
+        "experimental_operation_depth_limit": {
+          "description": "Experimental limitation of query depth default: 4096",
+          "default": 4096,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
         },
         "health_check_path": {
           "description": "healthCheck path default: \"/.well-known/apollo/server-health\"",

@@ -161,6 +161,7 @@ impl PlanNode {
     pub(crate) fn parse_subselections(
         &self,
         schema: &Schema,
+        operation_depth_limit: u32,
     ) -> HashMap<(Option<Path>, String), Query> {
         if !self.contains_defer() {
             return HashMap::new();
@@ -168,7 +169,12 @@ impl PlanNode {
         // re-create full query with the right path
         // parse the subselection
         let mut subselections = HashMap::new();
-        self.collect_subselections(schema, &Path::default(), &mut subselections);
+        self.collect_subselections(
+            schema,
+            &Path::default(),
+            &mut subselections,
+            operation_depth_limit,
+        );
 
         subselections
     }
@@ -178,28 +184,38 @@ impl PlanNode {
         schema: &Schema,
         initial_path: &Path,
         subselections: &mut HashMap<(Option<Path>, String), Query>,
+        operation_depth_limit: u32,
     ) {
         // re-create full query with the right path
         // parse the subselection
         match self {
             Self::Sequence { nodes } | Self::Parallel { nodes } => {
                 nodes.iter().fold(subselections, |subs, current| {
-                    current.collect_subselections(schema, initial_path, subs);
+                    current.collect_subselections(
+                        schema,
+                        initial_path,
+                        subs,
+                        operation_depth_limit,
+                    );
 
                     subs
                 });
             }
             Self::Flatten(node) => {
-                node.node
-                    .collect_subselections(schema, initial_path, subselections);
+                node.node.collect_subselections(
+                    schema,
+                    initial_path,
+                    subselections,
+                    operation_depth_limit,
+                );
             }
             Self::Defer { primary, deferred } => {
                 // TODO rebuilt subselection from the root thanks to the path
                 let primary_path = initial_path.join(&primary.path.clone().unwrap_or_default());
                 let query = reconstruct_full_query(&primary_path, &primary.subselection);
                 // ----------------------- Parse ---------------------------------
-                let sub_selection =
-                    Query::parse(&query, schema).expect("it must respect the schema");
+                let sub_selection = Query::parse(&query, schema, operation_depth_limit)
+                    .expect("it must respect the schema");
                 // ----------------------- END Parse ---------------------------------
 
                 subselections.insert(
@@ -211,8 +227,8 @@ impl PlanNode {
                         // TODO rebuilt subselection from the root thanks to the path
                         let query = reconstruct_full_query(&current.path, subselection);
                         // ----------------------- Parse ---------------------------------
-                        let sub_selection =
-                            Query::parse(&query, schema).expect("it must respect the schema");
+                        let sub_selection = Query::parse(&query, schema, operation_depth_limit)
+                            .expect("it must respect the schema");
                         // ----------------------- END Parse ---------------------------------
 
                         subs.insert(
@@ -225,6 +241,7 @@ impl PlanNode {
                             schema,
                             &initial_path.join(&current.path),
                             subs,
+                            operation_depth_limit,
                         );
                     }
 
@@ -238,10 +255,20 @@ impl PlanNode {
                 ..
             } => {
                 if let Some(node) = if_clause {
-                    node.collect_subselections(schema, initial_path, subselections);
+                    node.collect_subselections(
+                        schema,
+                        initial_path,
+                        subselections,
+                        operation_depth_limit,
+                    );
                 }
                 if let Some(node) = else_clause {
-                    node.collect_subselections(schema, initial_path, subselections);
+                    node.collect_subselections(
+                        schema,
+                        initial_path,
+                        subselections,
+                        operation_depth_limit,
+                    );
                 }
             }
         }

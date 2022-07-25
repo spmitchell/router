@@ -69,7 +69,10 @@ impl RouterServiceConfigurator for YamlRouterServiceFactory {
         schema: Arc<Schema>,
         _previous_router: Option<&'a Self::RouterServiceFactory>,
     ) -> Result<Self::RouterServiceFactory, BoxError> {
-        let mut builder = PluggableRouterServiceBuilder::new(schema.clone());
+        let mut builder = PluggableRouterServiceBuilder::new(
+            schema.clone(),
+            configuration.server.experimental_operation_depth_limit,
+        );
         if configuration.server.introspection {
             builder = builder.with_naive_introspection();
         }

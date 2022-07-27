@@ -22,6 +22,7 @@ use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use opentelemetry::global;
 use opentelemetry::trace::SpanKind;
+use rustls;
 use schemars::JsonSchema;
 use tokio::io::AsyncWriteExt;
 use tower::util::BoxService;
@@ -60,6 +61,58 @@ impl Display for Compression {
     }
 }
 
+#[derive(Debug, Clone)]
+struct MtlsError {
+    details: String
+}
+
+impl MtlsError {
+    fn new(msg: &str) -> MtlsError {
+        MtlsError{details: msg.to_string()}
+    }
+}
+
+impl std::fmt::Display for MtlsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+impl std::error::Error for MtlsError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+impl From<std::io::Error> for MtlsError {
+    fn from(err: std::io::Error) -> Self {
+        MtlsError::new(&err.to_string())
+    }
+}
+
+// Implementation of `ServerCertVerifier` that verifies everything as trustworthy.
+struct SkipServerVerification;
+
+impl SkipServerVerification {
+    fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+impl rustls::client::ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
 /// Client for interacting with subgraphs.
 #[derive(Clone)]
 pub struct SubgraphService {
@@ -69,12 +122,55 @@ pub struct SubgraphService {
 
 impl SubgraphService {
     pub fn new(service: impl Into<String>) -> Self {
-        let connector = hyper_rustls::HttpsConnectorBuilder::new()
+        let mut connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .https_or_http()
             .enable_http1()
             .enable_http2()
             .build();
+
+        let (client_cert_path, client_key_path) = (std::env::var("MTLS_CLIENT_CERT").unwrap_or("".to_string()),
+                                                   std::env::var("MTLS_CLIENT_KEY").unwrap_or("".to_string()));
+
+        if client_cert_path != "" && client_key_path != "" {
+            println!("Configuring for mTLS with cert/key {client_cert_path:?} / {client_key_path:?}");
+            // Load the cert/key pair
+            fn open_cert_file<F,T>(file: &str, method: F) -> Result<Vec<T>, MtlsError>
+              where F : Fn(&mut dyn std::io::BufRead) -> Result<Vec<T>, std::io::Error> {
+                let certfile = std::fs::File::open(file)?;
+                let mut reader = std::io::BufReader::new(certfile);
+                match method(&mut reader) {
+                    Err(_e) => return Err(MtlsError::new("Error during certificate parsing: {_e:?}")),
+                    Ok(certs) => match certs.len() {
+                        0 => return Err(MtlsError::new("No certificate(s) found at {file:?}")),
+                        _ => Ok(certs)
+                    }
+                }
+            }
+
+            let certs = open_cert_file(&client_cert_path, rustls_pemfile::certs);
+            let key = open_cert_file(&client_key_path, rustls_pemfile::rsa_private_keys)
+                .or_else(|_| open_cert_file(&client_key_path, rustls_pemfile::pkcs8_private_keys))
+                .and_then(|keys| match keys.get(0){
+                    None => Err(MtlsError::new("Unable to parse key at {client_key_path:?}")),
+                    Some(key) => Ok(key.clone())
+                });
+
+            connector = match (certs, key) {
+                (Ok(c), Ok(k)) => hyper_rustls::HttpsConnectorBuilder::new()
+                    .with_tls_config(rustls::ClientConfig::builder()
+                                       .with_safe_defaults()
+                                       .with_custom_certificate_verifier(SkipServerVerification::new())
+                                       .with_single_cert(c.into_iter().map(rustls::Certificate).collect(),
+                                                         rustls::PrivateKey(k))
+                                       .unwrap())
+                    .https_or_http()
+                    .enable_http1()
+                    .enable_http2()
+                    .build(),
+                _ => connector
+            };
+        }
 
         Self {
             client: ServiceBuilder::new()

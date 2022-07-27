@@ -171,6 +171,8 @@ dependencies = [
  "reqwest",
  "rhai",
  "router-bridge",
+ "rustls 0.20.4",
+ "rustls-pemfile",
  "schemars",
  "serde",
  "serde_json",

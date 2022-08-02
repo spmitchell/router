@@ -133,7 +133,7 @@ impl SubgraphService {
                                                    std::env::var("MTLS_CLIENT_KEY").unwrap_or("".to_string()));
 
         if client_cert_path != "" && client_key_path != "" {
-            println!("Configuring for mTLS with cert/key {client_cert_path:?} / {client_key_path:?}");
+            tracing::info!("Configuring for mTLS with cert/key {client_cert_path:?} / {client_key_path:?}");
             // Load the cert/key pair
             fn open_cert_file<F,T>(file: &str, method: F) -> Result<Vec<T>, MtlsError>
               where F : Fn(&mut dyn std::io::BufRead) -> Result<Vec<T>, std::io::Error> {
